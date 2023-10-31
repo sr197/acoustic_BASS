@@ -1,0 +1,56 @@
+---
+title: "Exploratory_code"
+author: "Sarah Roberts"
+date: "2023-10-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data 
+
+#1 Setup 
+
+## 1.1 Load packages 
+```{r}
+devtools::install_github("https://github.com/DenaJGibbon/behaviouR") #this is Dena Clink's book of tutorials - https://bookdown.org/djc426/behaviouR-R-package-tutorials/ 
+library(behaviouR)
+
+library(ggfortify)
+library(ggplot2)
+
+```
+
+## 1.2 read in data 
+something is weird with the working directory so reading in manually
+```{r}
+WaveFile <- tuneR::readWave("~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+WaveFile
+```
+
+double check the sampling rate 
+```{r}
+seewave::duration(WaveFile) * WaveFile@samp.rate
+```
+
+##1.3 plotting
+Now we can plot the waveform from our sound file using the following code:
+zoom in so that we can actually see the shape of the wave.
+
+```{r}
+seewave::oscillo(WaveFile, from = 0.1, to = 0.2)
+seewave::oscillo(WaveFile, from = 0.18, to = 0.2)
+```
+
+Spectogram 
+```{r}
+SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+
+#change the frequency 
+SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav", min.freq = 500, 
+    max.freq = 2500,
+    Colors = "Colors")
+```
+
