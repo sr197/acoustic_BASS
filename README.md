@@ -13,3 +13,19 @@ tuneR
 monitoR
 
 warbleR
+  https://marce10.github.io/warbleR/
+  
+Soundclass - convolutional neural networks (CNNs) 
+  Working example: https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/2041-210X.13964 
+
+gibbonR 
+  https://github.com/DenaJGibbon/gibbonR
+  
+bioacoustics - unsupervised classification 
+  https://github.com/WavX/bioacoustics/blob/master/vignettes/tutorial.Rmd 
+  
+ribbit - frog specific 
+  https://github.com/kitzeslab/r-ribbit/blob/main/notebook_for_ribbit.Rmd
+  
+ohun -
+  https://besjournals.onlinelibrary.wiley.com/doi/epdf/10.1111/2041-210X.14170
