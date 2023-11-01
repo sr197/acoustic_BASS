@@ -1,0 +1,576 @@
+---
+title: "Week_8_Lab"
+author: "Sarah Roberts"
+date: "2023-03-28"
+output: html_document
+---
+
+Load packages - I think you all will appreciate using Tidymodels vs. caret, so we will go for it. Note - I am learning alongside you, so this should be fun. 
+
+We are going to use data from the Program for International Student Assessment (PISA) - you can download it off the web (https://www.oecd.org/pisa/data/), but we will be grabbing it from github. 
+
+```{r}
+library(tidymodels)
+library(tidyflow)
+
+#if you can't install tidyflow, we can install it straight from github. This is really useful when people haven't put their packages on CRAN yet 
+# install.packages("devtools")
+# devtools::install_github("cimentadaj/tidyflow")
+
+library(rpart.plot)
+library(vip)
+library(baguette)
+library(ranger)
+
+data_link <- "https://raw.githubusercontent.com/cimentadaj/ml_socsci/master/data/pisa_us_2018.csv"
+pisa <- read.csv(data_link)
+```
+
+We’ll be focusing on predicting the math_score of students in the United States, based on the socio economic status of the parents (named HISEI in the data; the higher the HISEI variable, the higher the socio economic status), the father’s education (named FISCED in the data; coded as several categories from 0 to 6 where 6 is high education) and whether the child repeated a grade (named REPEAT in the data). REPEAT is a dummy variable where 1 means the child repeated a grade and 0 no repetition.
+
+##Decision Trees 
+Decision trees are simple models. In fact, they are even simpler than linear models. They require little statistical background and are in fact among the simplest models to communicate to a general audience. In particular, the visualizations used for decision trees are very powerful in conveying information.
+
+Decision trees, as their name conveys, are tree-like diagrams. They work by defining yes-or-no rules based on the data and assign the most common value for each respondent within their final branch. The best way to learn about decision trees is by looking at one. 
+
+###Interpreting a tree diagram
+I am going to run a decision tree to show you the output, and then go back and describe what this code is doing in the section 'Building a decision tree'  
+```{r}
+# Define the decision tree and tell it the the dependent
+# variable is continuous ('mode' = 'regression')
+mod1 <- set_engine(decision_tree(mode = "regression"), "rpart")
+
+tflow <-
+  # Plug the data
+  pisa %>%
+  # Begin the tidyflow
+  tidyflow(seed = 23151) %>%
+  # Separate the data into training/testing (we are keeping 3/4 of the data for training)
+  plug_split(initial_split, prop = 3/4) %>%
+  # Plug the formula
+  plug_formula(math_score ~ FISCED + HISEI + REPEAT) %>%
+  # Plug the model
+  plug_model(mod1)
+
+vanilla_fit <- fit(tflow)
+tree <- pull_tflow_fit(vanilla_fit)$fit
+rpart.plot(tree)
+```
+In this example the top-most box which says HISEI < 57 is the root node. This is the most important variable that predicts math_score. Inside the blue box you can see two numbers: 100% which means that the entire sample is present in this node and the number 472, the average test score for mathematics for the entire sample.
+
+On both sides of the root node (HISEI < 57) there is a yes and a no. Decision trees work by partitioning variables into yes-or-no branches. The yes branch satisfies the name of root (HISEI < 57) and always branches out to the left. In contrast, the no branch always branches out to the right. 
+
+The criteria for separating into yes-or-no branches is that respondents must be very similar within branches and very different between branches (remember from lecture, minimizing RSS). The decision tree figures out that respondents that have an HISEI below 57 and above 57 are the most different with respect to the mathematics score. The left branch (where there is a yes in the root node) are those which have a HISEI below 57 and the right branch (where there is a no) are those which have a HISEI above  
+57. Let’s call these two groups the low and high SES respectively. If we look at the two boxes that come down from these branches, the low SES branch has an average math score of 444 while the high SES branch has an average test score of 501. 
+
+For the sake of simplicity, let’s focus now on the branch of the low SES group (the left branch). The second node coming out of the low SES branch contains 50% of the sample and an average math score of 444 . This is the node with the rule REPEAT >= 0.5. 
+
+This ‘intermediate’ node is called internal node. For calculating this internal node, the decision tree algorithm limits the entire data set to only those which have low SES (literally, the decision tree does something like pisa[pisa$HISEI < 57, ]) and asks the same question that it did in the root node: of all the variables in the model which one separates two branches such that respondents are very similar within the branch but very different between the branches with respect to math_score?
+
+For those with low SES background, this variable is whether the child repeated a grade or not. In particular, those coming from low SES background which repeated a grade, had an average math score of 385 whereas those who didn’t have an average math score of 454.
+
+These two nodes at the bottom are called leaf nodes because they are like the ‘leafs of the tree’. Leaf nodes are of particular importance because they are the ones that dictate what the final value of math_score will be. Any new data that is predicted with this model will always give an average math_score of 454 for those of low SES background who didn’t repeat a grade.
+
+Similarly, any respondent from high SES background, with a highly educated father who didn’t repeat a grade, will get assigned a math_score of 528 (lower right leaf)
+
+###Building a decision tree
+Lets look back at that code from above. It uses tidy syntax which we should be familiar with, but there are a few new pieces. 
+
+All plug_* functions serve to build your machine learning workflow and the model decision_tree serves to define the decision tree and all of the arguments. rpart.plot on the other hand, is a function used specifically for plotting decision trees (that is why we loaded the package rpart.plot at the beginning). No need to delve much into this function. It just works if you pass it a decision tree model: that is why pull the model fit before calling it.
+
+###Overfitting 
+One of the main issues with decision trees is they tend to overfit a lot. Let’s say we’re trying to understand which variables are related to whether teachers set goals in the classroom. Substantially, this example might not make a lot of sense, but but let’s follow along just to show how much trees can overfit the data. This variable is named ST102Q01TA. Let’s plug it into our tidyflow and visualize the tree:
+
+```{r}
+# We can recycle the entire `tflow` from above and just
+# replace the formula:
+tflow <-
+  tflow %>%
+  replace_formula(ST102Q01TA ~ .)
+
+fit_complex <- fit(tflow)
+tree <- pull_tflow_fit(fit_complex)$fit
+rpart.plot(tree)
+```
+The tree is quite big compared to our previous example and makes the interpretation more difficult. However, equally important, some leaf nodes are very small. Decision trees can capture a lot of noise and mimic the data very closely. 6 leaf nodes have less than 3% of the sample. These are leaf nodes with very weak statistical power.
+
+Decision trees have an argument called min_n that force the tree to discard any node that has a number of observations below your specified minimum. Let’s run the model above and set the minimum number of observation per node to be 200
+
+```{r}
+dectree <- update(mod1, min_n = 200)
+tflow <-
+  tflow %>%
+  replace_model(dectree)
+
+fit_complex <- fit(tflow)
+tree <- pull_tflow_fit(fit_complex)$fit
+rpart.plot(tree)
+```
+The tree was reduced considerably now. There are fewer leaf nodes and all nodes have a greater sample size than before. 
+
+As well as the min_n argument, decision trees have another argument called tree_depth. This argument forces the tree to stop growing if it passes the maximum depth of the tree as measured in nodes. Let’s run our previous example with only a depth of three nodes.
+
+```{r}
+dectree <- update(mod1, min_n = 200, tree_depth = 3)
+tflow <-
+  tflow %>%
+  replace_model(dectree)
+
+fit_complex <- fit(tflow)
+tree <- pull_tflow_fit(fit_complex)$fit
+rpart.plot(tree)
+```
+
+###Prediction
+Let’s go back to our original model and examine how it predicts
+```{r}
+tflow <-
+  tflow %>%
+  replace_formula(math_score ~ FISCED + HISEI + REPEAT)
+
+fit_complex <- fit(tflow)
+tree <- pull_tflow_fit(fit_complex)$fit
+rpart.plot(tree)
+
+fit_complex %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+```
+
+To improve prediction, we can allow tidyflow to search for the best combination of min_n and tree_depth that maximizes prediction. Let’s perform a grid search for these two tuning values.
+
+```{r}
+tune_mod <- update(dectree, min_n = tune(), tree_depth = tune())
+
+tflow <-
+  tflow %>%
+  plug_resample(vfold_cv, v = 5) %>%
+  plug_grid(
+    expand.grid,
+    tree_depth = c(1, 3, 9),
+    min_n = c(50, 100)
+  ) %>%
+  replace_model(tune_mod)
+
+fit_tuned <- fit(tflow)
+
+fit_tuned %>%
+  pull_tflow_fit_tuning() %>%
+  show_best(metric = "rmse")
+```
+
+We can plot whether the error changes between the minimum sample size and the tree depth:
+
+```{r}
+tree_depth_lvl <- paste0("Tree depth: ", c(1, 3, 9))
+
+fit_tuned %>%
+  pull_tflow_fit_tuning() %>%
+  collect_metrics() %>%
+  mutate(ci_low = mean - (1.96 * std_err),
+         ci_high = mean + (1.96 * std_err),
+         tree_depth = factor(paste0("Tree depth: ", tree_depth), levels = tree_depth_lvl),
+         min_n = factor(min_n, levels = c("50", "100"))) %>%
+  filter(.metric == "rmse") %>% 
+  ggplot(aes(min_n, mean)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = .1) +
+  scale_x_discrete("Minimum sample size per node") +
+  scale_y_continuous("Average RMSE") +
+  facet_wrap(~ tree_depth, nrow = 1) +
+  theme_minimal()
+```
+
+On the x axis we have the minimum sample size per node (these are the values for min_n) and on the y axis we have the error of the model through cross-validation (the RMSE). The lower each points is on the plot, the better, since it means that the error is lower.
+
+We calculated this ourselves for this example, but complete_tflow can calculate this for you:
+
+```{r}
+final_model <-
+  fit_tuned %>%
+  complete_tflow(metric = "rmse",
+                 tree_depth,
+                 method = "select_by_one_std_err")
+
+train_err <-
+  final_model %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+
+test_err <-
+  final_model %>%
+  predict_testing() %>%
+  rmse(math_score, .pred)
+
+c("testing error" = test_err$.estimate, "training error" = train_err$.estimate)
+
+```
+
+Our testing error and our training error have a difference of only  0.4, not bad. The cross-validation tuning seemed to have helped avoid a great deal of overfitting.
+
+##Bagging
+The problem with decision trees is that even if you work really hard to avoid overfitting, they can be very susceptible to the exact composition of the data. For some extreme cases, you might even get completely different trees every time you run your model. Quite literally, running the same model might offer very different trees if some part of the sample changes.
+
+Decision trees have a lot of variance and very little bias. They learn the current data very well (little bias) but if you generalize them to new data, they can perform very badly (a lot of variance). This is where bagging, or Bootstrap Aggregation comes in.
+
+###By hand
+Before get into bagging, let’s spend a minute doing some bootstrapping. Let’s work out a manual example and limit our pisa dataset to only five rows, keep a few selected columns and add a unique id for each row:
+
+```{r}
+sel_cols <- c("math_score", "HISEI", "REPEAT", "IMMIG", "read_score")
+pisa_small <- pisa[1:5, sel_cols]
+pisa_small$id <- 1:5
+pisa_small
+```
+
+This is the same pisa dataset but only with the first five rows, and id column for each respondent and some columns. Bootstraping is a statistical technique that randomly picks observations from the sample. This means that some observations might get picked while others might not. In fact, some observations might even get picked many times! We can do this manually in R:
+
+```{r}
+# Sample from the number of rows in `pisa_small`
+# and allow certain numbers to be replaced.
+set.seed(23551)
+row_index <- sample(nrow(pisa_small), replace = TRUE)
+pisa_small[row_index, ]
+```
+
+We randomly sampled from the data and got the respondent number four repeated twice. We can run this many times and get many resamples of our data - here we run it 4 times
+```{r}
+
+for(i in 1:4)  {
+  row_index <- sample(nrow(pisa_small), replace = TRUE)
+  print(pisa_small[row_index, ])
+  
+}
+
+```
+Since the choosing of rows is random, in some instances we might randomly obtain the same row repeated ten times, in others only one time and others even zero times! This is what bootstrapping is all about. If we run  10 bootstraps, it just means we have 10 datasets where in each one some rows are repeated many times and others are randomly removed.
+
+Bootstrapping is mainly used to calculate statistics such as standard errors and standard deviations because it has very nice properties to estimate uncertainty in situations where its impossible to calculate it. However, it also has advantages for reducing the variance in models such as decision trees. Let’s get back to how bagging works. Bagging works by bootstraping your data N times and fitting N decision trees. Each of these decision trees has a lot of variance because we allow the tree to overfit the data. The trick with bagging is that we average over the predictions of all the N decision trees, improving the high variability of each single decision tree.
+
+In the same spirit as before, let’s work out a manual example just so you can truly grasp that intuition. However, don’t worry, there are functions inside tidymodels and tidyflow that will perform all of this for you.
+
+Let’s adapt the code from above to use the original pisa data, sample only 60% of the data in each bootstrap and generate 20 copies of our data with random picks of rows in each iteration:
+
+```{r}
+pisa$id <- 1:nrow(pisa)
+
+bootstrap_pisa <- list()
+for(i in 1:20)  {
+  row_index <- sample(nrow(pisa)*.60, replace = TRUE)
+  bootstrap_pisa[[i]] <- pisa[row_index, ]
+}
+
+
+```
+The result is named bootstrap_pisa and is list with 20 data frames. You can inspect the first two with bootstrap_pisa[[1]] and bootstrap_pisa[[2]]. Inside each of these, there should be a data frame with 60% of the original number of rows of the pisa data where each row was randomly picked. Some of these might be repeated many times, others might just be there once and others might not even be there.
+
+Let’s now loop over these 20 datasets, fit a decision tree to each one and predict on the original pisa data. The result of this loop should be 20 data frames each with a prediction for every respondent
+
+```{r}
+tflow <-
+  tidyflow() %>%
+  plug_formula(math_score ~ .) %>%
+  plug_model(decision_tree(mode = "regression") %>% set_engine("rpart"))
+
+all_pred_models <-
+  lapply(bootstrap_pisa, function(x) {
+    small_model <-
+      tflow %>%
+      plug_data(x) %>%
+      fit()
+
+    cbind(
+      pisa["id"],
+      predict(small_model, new_data = pisa)
+    )
+  })
+```
+
+The first slot contains predictions for all respondents. Let’s confirm that:
+```{r}
+head(all_pred_models[[1]])
+
+```
+
+Here we only show the first five rows, but you can check that it matches the same number of rows as the original pisa with nrow(all_pred_model[[1]]) and nrow(pisa). Let’s confirm the same thing for the second slot:
+```{r}
+head(all_pred_models[[2]])
+
+```
+The second slot also contains predictions for all respondents but they are different from the first slot because they are based on a random sample. This same logic is repeated 20 times such that every respondent has 20 predictions. The trick behind bagging is that it averages the prediction of each respondent over the 20 bootstraps.
+
+This averaging has two advantages. First, it allows each single tree to grow as much as possible, allowing it to have a lot of variance and little bias. This has a good property which is little bias but a negative aspect, which is a lot of variance. Bagging compensates this high level of variance by averaging the predictions of all the small trees:
+
+```{r}
+# Combine all the 20 predictions into one data frame
+all_combined <- all_pred_models[[1]]
+for (i in seq_along(all_pred_models)[-1]) {
+  all_combined <- cbind(all_combined, all_pred_models[[i]][-1])
+}
+
+# Average over the 20 predictions
+res <- data.frame(id = all_combined[1], final_pred = rowMeans(all_combined[-1]))
+
+# Final prediction for each respondent
+head(res)
+```
+We get a final prediction for each respondent. If we wanted to, we could calculate the standard deviation of these 20 predictions for each respondent and generate uncertainty intervals around each respondent’s predictions.
+
+###Tidymodels
+Let’s fit the same model we just implemented manually above using tidymodels and tidyflow. Bagged trees can be implemented with the function bag_tree from the package baguette. With this package we can control the number of bootstraps with the argument times. We can define our model as usual using tidyflow
+
+```{r}
+btree <- bag_tree(mode = "regression") %>% set_engine("rpart", times = 50)
+
+tflow <-
+  pisa %>%
+  tidyflow(seed = 566521) %>%
+  plug_split(initial_split) %>% 
+  plug_formula(math_score ~ .) %>%
+  plug_model(btree)
+
+tflow
+```
+
+You might be asking yourself, why don’t we define bootstraps inside plug_resample? After all,bootstraps is a resampling technique. We could do that but it doesn’t make sense in this context. plug_resample is aimed more towards doing grid search of tuning values together with plug_grid. Since bag_trees is not performing any type of grid search but rather fitting a model many times and making predictions, it automatically incorporates this procedure inside bag_trees. If instead we were doing a grid search of let’s say, min_n and tree_depth for bag_tree, using plug_resample with boostraps would be perfectly reasonable.
+
+Let’s fit both a simple decision tree and the bagged decision tree, predict on the training set and record the average RMSE for both:
+
+```{r}
+res_btree <- tflow %>% fit()
+res_dtree <- tflow %>% replace_model(decision_tree(mode = "regression") %>% set_engine("rpart")) %>% fit()
+
+rmse_dtree <-
+  res_dtree %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+
+rmse_btree <-
+  res_btree %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+
+c("Decision tree" = rmse_dtree$.estimate, "Bagged decision tree" = rmse_btree$.estimate)
+```
+
+It looks like our model is better than the decision tree but it was overfitting the training data considerably.
+
+As all other models, bagging also has limitations. First, although bagged decision trees offer improved predictions over single decision trees, they do this at the expense of interpretability. Unfortunately, there is no equivalent of an ‘average’ tree that we can visualize. Remember, we have  
+100 predictions from  100  different trees. It is not possible nor advisable to visualize  100 trees. Instead, we can look at the average variable importance. Bagging offers the ‘contribution’ of each variable using loss functions. For continuous variables, it uses the RSS and for binary variables it uses the Gini index. We can look at the importance of the variables to get a notion of which variables are contributing the most for predictions:
+
+```{r}
+res_btree %>%
+  pull_tflow_fit() %>%
+  .[['fit']] %>%
+  var_imp()
+```
+
+##Random Forests 
+When performing bagged decision trees, several variables that are correlated with the outcome of the decision tree can dominate, which can be a problem given that the whole idea behind bagging is to average predictions from very different trees. If we have a variable that is constantly repeated in every single tree, then the predictions will be very similar. Random Forests are an extension of bagged decision trees because they randomly sample N variables in each split. More specifically, instead of considering all variables in the data, for calculating a given split, random forests pick a random sample of N variables to be considered for that split.
+
+Random Forests differ from decision trees in that instead of evaluating cutoff splits for every variable, they evaluate cutoff splits only for a random sample of  N variables. The number of variables N used for each split can be chosen by the user and often it is chosen through a grid search.
+
+The number of columns to be used in each split is called mtry and there are standard rules of thumb for the number of variables to be randomly picked. In particular, the two most common are sqrt(total number of variables) and total number of variables/3
+
+Let’s try running the same math_score example but with a random forest, predict on the training set and calculate the RMSE of the model:
+
+```{r}
+# Define the random forest
+rf_mod <-
+  rand_forest(mode = "regression") %>%
+  set_engine("ranger", importance = "impurity")
+
+# Define the `tidyflow` with the random forest model
+# and include all variables (including scie_score and read_score)
+tflow <-
+  pisa %>%
+  tidyflow(seed = 23151) %>%
+  plug_formula(math_score ~ .) %>%
+  plug_split(initial_split) %>%
+  plug_model(rf_mod)
+
+res_rf <- tflow %>% fit()
+
+res_rf %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+```
+
+It performs slightly worse than the bagged decision trees (the bagged decision tree had an error of 11.33 math test points). Why is that? Let’s look at which variables are important in the random forest:
+
+```{r}
+res_rf %>%
+  pull_tflow_fit() %>%
+  .[['fit']] %>%
+  vip() +
+  theme_minimal()
+```
+
+scie_score and read_score seem to be the most relevant variables. But not only are they the most relevant ones, they are disproportionately the strongest: they both are seven times more important than the next most strongest variable.
+
+When there are only a few very strong predictors (let’s say, two), then you might have a lot of trees which don’t offer a lot of good predictions. In the model we ran above, the total number of variables used at each split was 22 meaning that if scie_score and read_score are the only important variables that predict math_score, they might be excluded from a lot of the splits. This means that out of the 500 default trees that are repeated, you might get trees which are not better at predicting math_score than random luck.
+
+Based on this intuition, if we increase the number of variables used at each split, we should see an increase in predictive error. Why? Because it means the scie_score and read_score will have greater probability of being included at each split. Let’s try something close to  1/3 of the number of variables (this is 150 variables):
+
+```{r}
+rf_mod <-
+  rand_forest(mode = "regression", mtry = 150) %>%
+  set_engine("ranger")
+
+res_rf <- tflow %>% replace_model(rf_mod) %>% fit()
+
+res_rf %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+```
+
+The predictive error is reduced to be the same as the one from the bagged decision tree. However, time wise this model is superior than bag_tree because each decision tree uses less variables in total.
+
+You might be asking yourself: if bagged decision trees have a lot of correlated trees and the random forest decorrelates the trees, why is it performing just as well and not better? It’s not entirely clear. Random Forests are considered to be a bit of a ‘black box’ and they might work well in certain cases and bad in others. However, having the intuition of how random forests work can help us to approximate a likely explanation.
+
+If scie_score and read_score are the most important variables for predicting math_score and no other variables have strong correlations with math_score, then excluding these two variables from a model, might produce trees which just don’t predict math_score well. The value of a random forest over bagged decision trees is that each individual tree must have some sort of predictive power despite excluding the strongest predictors.
+
+Let’s predict on the testing data to check whether any of the two is overfitting more than the other:
+
+```{r}
+
+bt_rmse <-
+  res_btree %>%
+  predict_testing() %>%
+  rmse(math_score, .pred) %>%
+  pull(.estimate)
+
+rf_rmse <-
+  res_rf %>%
+  predict_testing() %>%
+  rmse(math_score, .pred) %>%
+  pull(.estimate)
+
+c("Bagged decision trees" = bt_rmse, "Random Forest" = rf_rmse)
+
+```
+
+###Tuning Random forest
+
+Aside from the argument mtry, random forests also have other parameters which can be tuned for their optimal value in a grid search. min_n and trees are the most important ones to tune.
+
+This next example can serve as an introductory template if you want to tune some values for your random forest. The package tune hosts a family of functions named grid_* which provide different approaches to sampling random number from different tuning arguments. For example, let’s use grid_regular to obtain an evenly spaced set of values for trees. This is how you would do it in tidymodels:
+
+grid_regular already knows which ‘sensible’ range of values to try. tidyflow provides the function plug_grid that allows you to specify the type of grid search you want to perform. Let’s divide the data into training/testing, specify a cross-validation and plug in the random forest and a grid_regula
+
+This can take a while so i will do it on a subset of the data 
+
+You can read more about model tuning here: https://cimentadaj.github.io/tidyflow/articles/d04_fitting-model-tuning.html 
+```{r}
+rf_mod <-
+  rand_forest(mode = "regression",
+              trees = tune()) %>%
+  set_engine("ranger")
+
+tflow <-
+  pisa %>% 
+  sample_frac(.05) %>% #this selects a small portion of the data for computation speed
+  tidyflow(seed = 2151) %>%
+  plug_split(initial_split) %>%
+  plug_resample(vfold_cv) %>%
+  plug_grid(grid_regular, levels = 10) %>%
+  plug_formula(math_score ~ .) %>%
+  plug_model(rf_mod)
+
+tflow
+
+res <- tflow %>% fit()
+res %>% pull_tflow_fit_tuning() %>% autoplot()
+```
+Once you’ve tuned your model you want to choose the final model. complete_tflow takes care of finding by the best combination of values for you. When you provide the metric of interest, it searches for the combination of parameters with the lowest error for your metric:
+
+```{r}
+final_mod <- res %>% complete_tflow(metric = "rmse")
+```
+
+Lets look at those predictions 
+```{r}
+final_mod %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+```
+Remember this is on a tiny portion of the dataset 
+
+
+##Boosting 
+So far, the tree based methods we’ve seen use decision trees as baseline models and an ensemble approach to calculate the average predictions of all decision trees. Boosting also uses decision trees as the baseline model but the ensemble strategy is fundamentally different.
+
+The name boosting comes from the notion that we fit a weak decision tree and we ‘boost’ it iteratively. This strategy is fundamentally different from bagging and random forests because instead of relying on hundreds of independent decision trees, boosting works by recursively boosting the the result of the same decision tree. I am not going to show you how to do this manually (although it is possible). Basically, boosting starts by fitting a weak tree (i.e with one variable). Boosting works by predicting the residuals of previous decision tree. In our example, we just fitted our first model and calculated the residuals. Boosting works by fitting a second model but the dependent variable should now be the residuals of the first model rather than the math_score variable. This second model is exactly the same as the first model with the only difference that the dependent variable is the residuals (the unexplained test scores from the first model) of the first model. Boosting is a way for each model to boost the last model’s performance by focusing mostly on observations which had big residuals (and thus greater error).
+
+Let’s fit our trademark model of math_score regressed on all variables with the more advanced implementation of boosting used in the package xgboost. The results from this model can be compared to our previous results of bagging and the random forest:
+
+```{r}
+boost_mod <-
+  boost_tree(mode = "regression", trees = 500) %>%
+  set_engine("xgboost")
+
+tflow <-
+  pisa %>%
+  tidyflow(seed = 51231) %>%
+  plug_formula(math_score ~ .) %>%
+  plug_split(initial_split) %>%
+  plug_model(boost_mod)
+
+res_boost <- fit(tflow)
+```
+
+Lets get out the RMSE on the training data 
+```{r}
+rmse_gb_train <-
+  res_boost %>%
+  predict_training() %>%
+  rmse(math_score, .pred)
+
+rmse_gb_train
+```
+
+RMSE of 0.0007! This an impressive improvement relative to the best random forest or bagging performance. It is even more remarkable that this improvement happens without performing any grid search for the most optimal values in the tuning values.
+
+Let’s check how it performs on the testing data and compare that to the same estimate from the bagged decision trees and the random forest:
+
+```{r}
+gb_rmse <-
+  res_boost %>%
+  predict_testing() %>%
+  rmse(math_score, .pred) %>%
+  pull(.estimate)
+
+c("Bagged decision trees" = bt_rmse,
+  "Random Forest" = rf_rmse,
+  "Extreme Gradient Boosting" = gb_rmse)
+```
+
+
+Boosting, and it’s more full featured cousin ‘Extreme Gradient Boosting’ (those are the initials of the package xgboost) are considered to be among the best predictive models currently developed. They can achieve impressive predictive power with little tuning and preprocessing of data. However, there is one pitfall that you should be aware of.
+
+In contrast to random forests, increasing the number of trees in a boosting algorithm can increase overfitting. For the random forest, increasing the number of trees has no impact on overfitting because what we actually get is the average of all these trees. However, for boosting, increasing the number trees means increasing the number of trees that iteratively try to explain residuals. You might reach a point that adding more trees will just try to explain residuals which are random, resulting in overfitting.
+
+boost_tree has implemented a tuning parameter called stop_iter. stop_iter signals that after N  number trees have passed without any improvement, the algorithm should stop. 
+```{r}
+boost_mod <- update(boost_mod, stop_iter = 20)
+
+tflow <-
+  tflow %>%
+  replace_model(boost_mod)
+
+res_boost <- fit(tflow)
+
+gb_rmse <-
+  res_boost %>%
+  predict_testing() %>%
+  rmse(math_score, .pred) %>%
+  pull(.estimate)
+
+c("Bagged decision trees" = bt_rmse,
+  "Random Forest" = rf_rmse,
+  "Extreme Gradient Boosting" = gb_rmse)
+```
+
+
+## In class Assignment 
+Create a decision tree that predicts reading score (read_score) using JOYREAD and HOMESCH. Plot the decision tree, changing the color of the nodes to grays instead of blues and take a screenshot of your code and tree and post to Canvas. 

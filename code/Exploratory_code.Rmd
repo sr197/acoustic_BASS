@@ -58,13 +58,21 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
     max.freq = 2500,
     Colors = "Colors")
 ```
+From this spectogram, we can tell which frequency the actual call is between (500-2500)
+
 #2 Model 
 
-##2.1 model setup 
+
+##2.1 feature extraction 
+This is esentially creating your training data from the .wav file. There are many different ways that scientists do this, but the overarching idea is that sound data contains too much redundant information to be used on a model. Computers just don’t have enough power to crunch all those numbers, so we need to identify a meaningful set of features that is smaller than using the whole waveform. This is also the case for image processing.
+
+We are going to use a feature extraction method called ‘Mel-frequency cepstral coefficients’. Make sure to specify the minimum and maximum frequency from your spectogram above
 ```{r}
 MyFeatureDataFrame <- MFCCFunction(input.dir = "/Users/sarahroberts/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset",min.freq = 500,max.freq=2000)
 ```
+This is a multivariate data frame that we can now cluster using a pca 
 
+##2.2 PCA 
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
 
@@ -74,7 +82,8 @@ ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
 
 ```
 
-##2.2 model run 
+##2.3 model runs
+lets run a basic random forest and support vector machine 
 ```{r}
 
 trainingdata <- MyFeatureDataFrame
@@ -95,4 +104,6 @@ print(paste('SVM accuracy',ml.model.svm$tot.accuracy))
 
 print(ml.model.svm)
 ```
+
+#3 cross validation 
 
