@@ -15,11 +15,16 @@ I am trying to become familiar with the ways that we analyze acoustic data using
 
 ## 1.1 Load packages 
 ```{r}
-devtools::install_github("https://github.com/DenaJGibbon/behaviouR") #this is Dena Clink's book of tutorials - https://bookdown.org/djc426/behaviouR-R-package-tutorials/ 
+devtools::install_github("https://github.com/DenaJGibbon/behaviouR") 
+
+devtools::install_github("https://github.com/DenaJGibbon/gibbonR")
+#this is Dena Clink's book of tutorials - https://bookdown.org/djc426/behaviouR-R-package-tutorials/ 
 library(behaviouR)
 
 library(ggfortify)
 library(ggplot2)
+
+install.packages("soundClass")
 
 ```
 
@@ -52,5 +57,42 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
 SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav", min.freq = 500, 
     max.freq = 2500,
     Colors = "Colors")
+```
+#2 Model 
+
+##2.1 model setup 
+```{r}
+MyFeatureDataFrame <- MFCCFunction(input.dir = "/Users/sarahroberts/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset",min.freq = 500,max.freq=2000)
+```
+
+```{r}
+pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
+
+MyFeatureDataFrame$class2 <- c("absent", "absent", "absent", "absent", "absent", "present", "present", "present", "present", "present")
+ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
+         colour = 'class2')
+
+```
+
+
+```{r}
+
+trainingdata <- MyFeatureDataFrame
+trainingdata$class <- as.factor(trainingdata$class2)
+
+trainingdata <- trainingdata %>% dplyr::select(-class2)
+
+ml.model.rf <- randomForest::randomForest(x=trainingdata[, 2:ncol(trainingdata)], y = trainingdata$class)
+
+
+print(ml.model.rf)
+
+ml.model.svm <- e1071::svm(trainingdata[, 2:ncol(trainingdata)], trainingdata$class, kernel = "radial", 
+                           cross = 3,
+                           probability = TRUE)
+
+print(paste('SVM accuracy',ml.model.svm$tot.accuracy))
+
+print(ml.model.svm)
 ```
 
