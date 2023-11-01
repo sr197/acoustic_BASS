@@ -74,7 +74,7 @@ ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
 
 ```
 
-
+##2.2 model run 
 ```{r}
 
 trainingdata <- MyFeatureDataFrame
