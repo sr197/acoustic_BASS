@@ -19,8 +19,9 @@ vignette: >
   %\VignetteEngine{knitr::knitr} 
 ---
 
-_______
-_______
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
 
 # Load the necessary packages
 
@@ -45,8 +46,7 @@ library(tools)
 library(randomForest)
 ```
 
-
-___________________
+------------------------------------------------------------------------
 
 # Load audio files
 
@@ -61,7 +61,7 @@ We can see that the MP3 file has been converted into a Wave object with 7551360 
 
 Remember that you just have to divide the number of samples by the sampling rate to retrieve the duration (s) of an audio file.
 
-___________________
+------------------------------------------------------------------------
 
 # Extract GUANO metadata
 
@@ -72,15 +72,14 @@ ___________________
 metadata(WaveFile)
 
 ```
+
 <br>
 
-
-Now that we have explored a WAV file, we will use the Fast Fourrier Transform (FFT) to compute a frequency-time representation of the recording, called a spectrogram. A spectrogram being the representation of the spectrum of frequencies in a recording as they vary through time. This representation, although not optimal, is still commonly used to detect animal vocalizations and extract acoustic features useful for classification with the purpose of animal identification.
-___________________
+Now that we have explored a WAV file, we will use the Fast Fourrier Transform (FFT) to compute a frequency-time representation of the recording, called a spectrogram. A spectrogram being the representation of the spectrum of frequencies in a recording as they vary through time. This representation, although not optimal, is still commonly used to detect animal vocalizations and extract acoustic features useful for classification with the purpose of animal identification. \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 # Plot audio files
 
-There are several options to display animal vocalizations in audio files with R. You can use both `spectro()` or `fspec()` functions to generate spectrograms with **bioacoustics**. `fspec()` generates only a matrix of the spectrogram, and thus has to be used with the `image()` function to display the spectrogram. It is also possible to use the `spectro()` function in **Seewave**.  
+There are several options to display animal vocalizations in audio files with R. You can use both `spectro()` or `fspec()` functions to generate spectrograms with **bioacoustics**. `fspec()` generates only a matrix of the spectrogram, and thus has to be used with the `image()` function to display the spectrogram. It is also possible to use the `spectro()` function in **Seewave**.
 
 Next, we will search manually and display an audio event (here, a bird vocalization) from a recording of *Catharus bicknelli*. To display a Region Of Interest (ROI) of the recording we will use temporal and frequency filters. Let's start with a temporal slice from 1 to 10 secs and a FFT size of 512 samples.
 
@@ -93,17 +92,17 @@ ticks <- c(from = 1000, to = 20000, by = 1000) # frequency tick marks from 1 to
                                                # 20 kHz, and steps at each 1 kHz
 temp_slice <- c(from = 1, to = 10) # in seconds
 spectro(WaveFile, tlim = temp_slice, FFT_size = 512, ticks_y = ticks)
-```  
+```
 
-Let's display spectrograms with various time / frequency limits (with `tlim=` and `flim=` arguments). You can also play with other arguments in `spectro()` and `fspec()` functions such as the percent of overlap between two FFTs (with `FFT_overlap=`) and various FFT resolutions (with `FFT_size=`). Note that the arguments are briefly explained in the documentation of each function:  
-  
+Let's display spectrograms with various time / frequency limits (with `tlim=` and `flim=` arguments). You can also play with other arguments in `spectro()` and `fspec()` functions such as the percent of overlap between two FFTs (with `FFT_overlap=`) and various FFT resolutions (with `FFT_size=`). Note that the arguments are briefly explained in the documentation of each function:
+
 ```{r help, eval=FALSE}
 # Access the arguments of the spectro function
 ?spectro
 ?fspec
 ```
 
-First, let's shorten the temporal axis from 2 to 3.5 secs to work on a shorter time window and compare the outputs from `spectro()` and `fspec()`  functions. Note that spectrograms can also be generated automatically while using the detection functions from **bioacoustics**. We will explore that in details in section 4.1.
+First, let's shorten the temporal axis from 2 to 3.5 secs to work on a shorter time window and compare the outputs from `spectro()` and `fspec()` functions. Note that spectrograms can also be generated automatically while using the detection functions from **bioacoustics**. We will explore that in details in section 4.1.
 
 ```{r spectro1, eval=FALSE}
 # Set plot margins to 0
@@ -148,23 +147,23 @@ image(spec_o, xaxt="n", yaxt="n")
 image(spec_f, xaxt="n", yaxt="n")
 ```
 
-___________________
+------------------------------------------------------------------------
 
 # The use of filters to detect and extract audio events
 
 The functions used to detect and extract audio events in a recording also rely on "generic" filters based on frequency and duration, along with other "specific" filters. Let's take a quick look at the generic filters available in the `threshold_detection()` and `blob_detection()` functions:
 
-  * High Pass (HPF) and Low Pass filters (LPF) can be employed to reduce the amount of unwanted noise in the recording or to track particular audio events within a narrower frequency bandwidth than the recording sampling rate. Frequencies below the HPF and above the LPF cutoff are greatly attenuated. These frequency filters can be set using the `HPF=` and `LPF=` arguments in the `threshold_detection()` and `blob_detection()` functions.
-  * Minimum and maximum duration of an audio event, and a minimum time between two audio events also help reduce the amount of unwanted noise, or track a particular audio event within a narrower temporal window. These temporal filters can be set using the `min_dur=`, `max_dur=`, and `TBE=` arguments in both `threshold_detection()` and `blob_detection()` functions.
-  * Other set of filters are specific to each detection function and will be defined while working with these functions on bird vocalizations.
+-   High Pass (HPF) and Low Pass filters (LPF) can be employed to reduce the amount of unwanted noise in the recording or to track particular audio events within a narrower frequency bandwidth than the recording sampling rate. Frequencies below the HPF and above the LPF cutoff are greatly attenuated. These frequency filters can be set using the `HPF=` and `LPF=` arguments in the `threshold_detection()` and `blob_detection()` functions.
+-   Minimum and maximum duration of an audio event, and a minimum time between two audio events also help reduce the amount of unwanted noise, or track a particular audio event within a narrower temporal window. These temporal filters can be set using the `min_dur=`, `max_dur=`, and `TBE=` arguments in both `threshold_detection()` and `blob_detection()` functions.
+-   Other set of filters are specific to each detection function and will be defined while working with these functions on bird vocalizations.
 
-___________________
+------------------------------------------------------------------------
 
 ## Detect and extract audio events in a recording
 
 ### Threshold detection
 
-Let's start with the `threshold_detection()` function on a recording containing calls from one of Caroline's primates. This function is an amplitude threshold detector that picks up audio events above the Signal to Noise Ratio (SNR). It combines several algorithms for detection, filtering and audio feature extraction. We will play with the arguments of this function to understand their implication in the detection and extraction of audio events (here, calls of some primate).  
+Let's start with the `threshold_detection()` function on a recording containing calls from one of Caroline's primates. This function is an amplitude threshold detector that picks up audio events above the Signal to Noise Ratio (SNR). It combines several algorithms for detection, filtering and audio feature extraction. We will play with the arguments of this function to understand their implication in the detection and extraction of audio events (here, calls of some primate).
 
 ```{r threshold_help, eval=FALSE}
 # Access the arguments of the threshold_detection function
@@ -248,7 +247,7 @@ View(TD$data$event_data) # Contains the filename and the time of detection in th
                          # recording, and 26 extracted features.
 ```
 
-The location (in number of samples) of the audio event in the recording is saved in a list. 
+The location (in number of samples) of the audio event in the recording is saved in a list.
 
 ```{r features2, eval=FALSE}
 # Start and end of the 5th extracted audio event (in samples)
@@ -271,7 +270,6 @@ plot(TD$data$freq_track[[5]], type = "l")
 ```
 
 The whole energy and frequency content can also be used to classify audio events instead of using acoustic features that may result in a loss of information. We will get there soon, but first, let's discover another detection function, here applied on echolocation calls of bats.
-
 
 ### Blob detection
 
@@ -340,7 +338,7 @@ This data frame is, for now, the only available set of acoustic features with th
 
 Now that we have played with both detection functions with bird and bat vocalizations, let's go back to birds to explore batch analysis (*i.e.*, with several recordings) and audio event classification.
 
-___________________
+------------------------------------------------------------------------
 
 ## Batch analysis and classification
 
@@ -419,13 +417,11 @@ head(predict(rf, Test[,-1], type = "prob"))
 
 We are now able to use this simple, but proven robust, classifier to detect new calls of your target species.
 
-
-___________________
+------------------------------------------------------------------------
 
 # Deep learning classification with the R interface to Keras
 
-We will use Keras in R which requires to install several packages in [Python](https://www.python.org/downloads/)
-Guidelines to install Keras properly in R are available [here](https://keras.rstudio.com/)
+We will use Keras in R which requires to install several packages in [Python](https://www.python.org/downloads/) Guidelines to install Keras properly in R are available [here](https://keras.rstudio.com/)
 
 Let's now explore a ConvNet approach available on Keras. We will follow the approach of [Hatami et al. (2017)](https://arxiv.org/pdf/1710.00886.pdf) to analyze time series as images with 2D ConvNets. The difference is that we will only perform max pooling at the last layer before activation and add batch normalization with dropouts at each layer.
 
@@ -499,16 +495,14 @@ table(Y_test[,2], Pred)
 Prob <- round(predict_proba(mod0, X_test, batch_size = 32, verbose = 1), 2)
 ```
 
-
-We obtained a val_loss < 0.2 and val_categorical_accuracy > 0.94 which is acceptable, but not better than the simplest RF approach we used in section 3.2.
-Using only 26 acoustic features as model inputs instead of the whole spectrogram content (energy and frequency distribution, and harmonics) probably reduced the performances of the CNN model.
+We obtained a val_loss \< 0.2 and val_categorical_accuracy \> 0.94 which is acceptable, but not better than the simplest RF approach we used in section 3.2. Using only 26 acoustic features as model inputs instead of the whole spectrogram content (energy and frequency distribution, and harmonics) probably reduced the performances of the CNN model.
 
 This tutorial is now complete. Comments and feedback are welcome:
 
-Francois: francois.fabianek@wavx.ca  
-Jean: jean.marchal@wavx.ca  
+Francois: [francois.fabianek\@wavx.ca](mailto:francois.fabianek@wavx.ca){.email}\
+Jean: [jean.marchal\@wavx.ca](mailto:jean.marchal@wavx.ca){.email}\
 [www.wavx.ca](https://www.wavx.ca)
 
+------------------------------------------------------------------------
 
-_______
-_______
+------------------------------------------------------------------------
