@@ -9,11 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data 
+I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data
 
-#1 Setup 
+# 1 Setup
 
-## 1.1 Load packages 
+## 1.1 Load packages
+
 ```{r}
 devtools::install_github("https://github.com/DenaJGibbon/behaviouR") 
 
@@ -23,76 +24,98 @@ library(behaviouR)
 
 library(ggfortify)
 library(ggplot2)
+library(dplyr)
 
 install.packages("soundClass")
 
 ```
 
-## 1.2 read in data 
-something is weird with the working directory so reading in manually
+## 1.2 Read in data
+
+Working directory is in ./code dir
+
 ```{r}
-WaveFile <- tuneR::readWave("~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+WaveFile <- tuneR::readWave("../data/subset/present1.wav")
 WaveFile
 ```
 
-double check the sampling rate 
+double check the sampling rate
+
 ```{r}
 seewave::duration(WaveFile) * WaveFile@samp.rate
 ```
 
-##1.3 plotting
-Now we can plot the waveform from our sound file using the following code:
-zoom in so that we can actually see the shape of the wave.
+## 1.3 Plotting
+
+Now we can plot the waveform from our sound file using the following code: zoom in so that we can actually see the shape of the wave.
 
 ```{r}
 seewave::oscillo(WaveFile, from = 0.1, to = 0.2)
+# 0.1 to 0.2 seconds
 seewave::oscillo(WaveFile, from = 0.18, to = 0.2)
+# 0.18 to 0.2 seconds
+seewave::oscillo(WaveFile, from = 0.199, to = 0.2)
+# 0.199 to 0.2 seconds
 ```
 
-Spectogram 
-```{r}
-SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+Spectogram
 
-#change the frequency 
-SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav", min.freq = 500, 
+```{r}
+# spectrogram with default settings
+SpectrogramSingle(sound.file = "../data/subset/present1.wav")
+
+# isolate frequency range
+SpectrogramSingle(sound.file = "../data/subset/present1.wav", min.freq = 500, 
     max.freq = 2500,
     Colors = "Colors")
 ```
-#2 Model 
 
-##2.1 model setup 
+# 2 Model
+
+## 2.1 Model setup
+
 ```{r}
-MyFeatureDataFrame <- MFCCFunction(input.dir = "/Users/sarahroberts/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset",min.freq = 500,max.freq=2000)
+MyFeatureDataFrame <- MFCCFunction(input.dir = "../data/subset", min.freq = 500,max.freq=2000)
+
+# Isolates freq range to 500 to 2000
+# MFCCs are a common choice for extracting features from audio signals
 ```
 
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
+# performs Principal Component Analysis (PCA) on feature dataframe: removes the first column (class), scales the variables to have a standard deviation of 1 before performing PCA
 
 MyFeatureDataFrame$class2 <- c("absent", "absent", "absent", "absent", "absent", "present", "present", "present", "present", "present")
+# adds new column "class2"
+
 ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
          colour = 'class2')
-
+# scatterplot of PCA results colored based on absent vs. present
+# proximity in the plot represents similarities in characteristics
 ```
 
-##2.2 model run 
+## 2.2 Model run
+
 ```{r}
 
 trainingdata <- MyFeatureDataFrame
 trainingdata$class <- as.factor(trainingdata$class2)
+# add class2 as a factor variable to class column in new dataframe
 
 trainingdata <- trainingdata %>% dplyr::select(-class2)
+# remove class2 variable from trainingdata
 
 ml.model.rf <- randomForest::randomForest(x=trainingdata[, 2:ncol(trainingdata)], y = trainingdata$class)
-
+# train random forest classifier: x -> predictor variables, y -> target variable
 
 print(ml.model.rf)
 
 ml.model.svm <- e1071::svm(trainingdata[, 2:ncol(trainingdata)], trainingdata$class, kernel = "radial", 
                            cross = 3,
                            probability = TRUE)
+# train support vector machine classifier -> 3-fold cross validation
 
 print(paste('SVM accuracy',ml.model.svm$tot.accuracy))
-
 print(ml.model.svm)
+# print SVM model & accuracy
 ```
-
