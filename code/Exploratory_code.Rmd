@@ -9,11 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data 
+I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data
 
-#1 Setup 
+# 1 Setup
 
-## 1.1 Load packages 
+## 1.1 Load packages
+
 ```{r}
 devtools::install_github("https://github.com/DenaJGibbon/behaviouR") 
 
@@ -31,36 +32,46 @@ install.packages("soundClass")
 
 ```
 
-## 1.2 read in data 
-something is weird with the working directory so reading in manually
+## 1.2 Read in data
+
+Working directory is in ./code dir
+
 ```{r}
-WaveFile <- tuneR::readWave("~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+WaveFile <- tuneR::readWave("../data/subset/present1.wav")
 WaveFile
 ```
 
-double check the sampling rate 
+double check the sampling rate
+
 ```{r}
 seewave::duration(WaveFile) * WaveFile@samp.rate
 ```
 
-##1.3 plotting
-Now we can plot the waveform from our sound file using the following code:
-zoom in so that we can actually see the shape of the wave.
+## 1.3 Plotting
+
+Now we can plot the waveform from our sound file using the following code: zoom in so that we can actually see the shape of the wave.
 
 ```{r}
 seewave::oscillo(WaveFile, from = 0.1, to = 0.2)
+# 0.1 to 0.2 seconds
 seewave::oscillo(WaveFile, from = 0.18, to = 0.2)
+# 0.18 to 0.2 seconds
+seewave::oscillo(WaveFile, from = 0.199, to = 0.2)
+# 0.199 to 0.2 seconds
 ```
 
-Spectogram 
-```{r}
-SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
+Spectogram
 
-#change the frequency 
-SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav", min.freq = 500, 
+```{r}
+# spectrogram with default settings
+SpectrogramSingle(sound.file = "../data/subset/present1.wav")
+
+# isolate frequency range
+SpectrogramSingle(sound.file = "../data/subset/present1.wav", min.freq = 500, 
     max.freq = 2500,
     Colors = "Colors")
 ```
+
 From this spectogram, we can tell which frequency the actual call is between (500-2500)
 
 ##1.4 DF data 
@@ -91,20 +102,27 @@ MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/in
 There are many different ways that scientists do this, but the overarching idea is that sound data contains too much redundant information to be used on a model. Computers just don’t have enough power to crunch all those numbers, so we need to identify a meaningful set of features that is smaller than using the whole waveform. This is also the case for image processing.
 
 We are going to use a feature extraction method called ‘Mel-frequency cepstral coefficients’. Make sure to specify the minimum and maximum frequency from your spectogram above - we may want to add in some other specifics here. 
+
 ```{r}
-MyFeatureDataFrame <- MFCCFunction(input.dir = "/Users/sarahroberts/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset",min.freq = 500,max.freq=2000)
+MyFeatureDataFrame <- MFCCFunction(input.dir = "../data/subset", min.freq = 500,max.freq=2000)
+
+# Isolates freq range to 500 to 2000
+# MFCCs are a common choice for extracting features from audio signals
 ```
 This is a multivariate data frame that we can now cluster using a pca 
 
 ##2.2 PCA 
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
+# performs Principal Component Analysis (PCA) on feature dataframe: removes the first column (class), scales the variables to have a standard deviation of 1 before performing PCA
 
 MyFeatureDataFrame <- MyFeatureDataFrame %>% 
   mutate(class = if_else(str_starts(class, "absent"), "absent", "present"))
 
 ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
          colour = 'class')
+# scatterplot of PCA results colored based on absent vs. present
+# proximity in the plot represents similarities in characteristics
 
 ```
 
@@ -114,19 +132,21 @@ lets run a basic random forest and support vector machine
 
 MyFeatureDataFrame <- MyFeatureDataFrame
 MyFeatureDataFrame$class <- as.factor(MyFeatureDataFrame$class)
+# add class2 as a factor variable to class column in new dataframe
 
 ml.model.rf <- randomForest::randomForest(x=MyFeatureDataFrame[, 2:ncol(MyFeatureDataFrame)], y = MyFeatureDataFrame$class)
-
+# train random forest classifier: x -> predictor variables, y -> target variable
 
 print(ml.model.rf)
 
 ml.model.svm <- e1071::svm(MyFeatureDataFrame[, 2:ncol(MyFeatureDataFrame)], MyFeatureDataFrame$class, kernel = "radial", 
                            cross = 3,
                            probability = TRUE)
+# train support vector machine classifier -> 3-fold cross validation
 
 print(paste('SVM accuracy',ml.model.svm$tot.accuracy))
-
 print(ml.model.svm)
+# print SVM model & accuracy
 ```
 
 #3 cross validation 
