@@ -26,6 +26,7 @@ library(ggplot2)
 library(dplyr)
 library(tidymodels)
 library(tidyflow)
+library(tidyverse)
 
 install.packages("soundClass")
 
@@ -69,7 +70,7 @@ Try reading in duke forest data. Need to read in the wav files, categorize as pr
 
 ```{r}
 
-vars <- read.csv("~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestPAMdata/DukeForest/Sites/Site12/DFexportAll.csv") #this tells me which ones are present/absent
+vars <- read.csv("arbimonCnictraining.csv") #this tells me which ones are present/absent
 
 SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestPAMdata/DukeForest/Sites/Site12/	
 PAM5_20230225_024000.wav")
@@ -101,7 +102,7 @@ This is a multivariate data frame that we can now cluster using a pca
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
 
 MyFeatureDataFrame <- MyFeatureDataFrame %>% 
-  mutate(class = if_else(str_starts(class, "absent"), "absent", "present"))
+  mutate(class = if_else(str_starts(Class, "absent"), "absent", "present"))
 
 ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
          colour = 'class')
@@ -120,13 +121,6 @@ ml.model.rf <- randomForest::randomForest(x=MyFeatureDataFrame[, 2:ncol(MyFeatur
 
 print(ml.model.rf)
 
-ml.model.svm <- e1071::svm(MyFeatureDataFrame[, 2:ncol(MyFeatureDataFrame)], MyFeatureDataFrame$class, kernel = "radial", 
-                           cross = 3,
-                           probability = TRUE)
-
-print(paste('SVM accuracy',ml.model.svm$tot.accuracy))
-
-print(ml.model.svm)
 ```
 
 #3 cross validation 
@@ -199,7 +193,7 @@ Now it’s time to tune the hyperparameters for a random forest model. First, le
 
 ```{r}
 set.seed(234)
-trees_folds <- vfold_cv(train,v = 2) #usually you use something like 10-fold cross validation 
+trees_folds <- vfold_cv(train,v = 2, strata = class) #usually you use something like 10-fold cross validation 
 ```
 
 We are ready to tune! Let’s use tune_grid() to fit models at all the different values we chose for each tuned hyperparameter. There are several options for building the object for tuning:
