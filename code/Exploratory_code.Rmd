@@ -9,11 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data 
+I am trying to become familiar with the ways that we analyze acoustic data using a subset of Caroline's gabon data
 
-#1 Setup 
+#1 Setup
 
-## 1.1 Load packages 
+## 1.1 Load packages
+
 ```{r}
 devtools::install_github("https://github.com/DenaJGibbon/behaviouR") 
 
@@ -32,28 +33,30 @@ install.packages("soundClass")
 
 ```
 
-## 1.2 read in data 
+## 1.2 read in data
+
 something is weird with the working directory so reading in manually
+
 ```{r}
 WaveFile <- tuneR::readWave("~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
 WaveFile
 ```
 
-double check the sampling rate 
+double check the sampling rate
+
 ```{r}
 seewave::duration(WaveFile) * WaveFile@samp.rate
 ```
 
-##1.3 plotting
-Now we can plot the waveform from our sound file using the following code:
-zoom in so that we can actually see the shape of the wave.
+##1.3 plotting Now we can plot the waveform from our sound file using the following code: zoom in so that we can actually see the shape of the wave.
 
 ```{r}
 seewave::oscillo(WaveFile, from = 0.1, to = 0.2)
 seewave::oscillo(WaveFile, from = 0.18, to = 0.2)
 ```
 
-Spectogram 
+Spectogram
+
 ```{r}
 SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset/present1.wav")
 
@@ -62,11 +65,10 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
     max.freq = 2500,
     Colors = "Colors")
 ```
+
 From this spectogram, we can tell which frequency the actual call is between (500-2500)
 
-##1.4 DF data 
-##INSERT CAROLINE CODE HERE 
-Try reading in duke forest data. Need to read in the wav files, categorize as present or absent using the csv, and select out a small portion to do stuff with (so the computer doesn't explode)
+##1.4 DF data ##INSERT CAROLINE CODE HERE Try reading in duke forest data. Need to read in the wav files, categorize as present or absent using the csv, and select out a small portion to do stuff with (so the computer doesn't explode)
 
 ```{r}
 
@@ -86,18 +88,21 @@ PAM5_20230225_024000.wav", min.freq = 500,
 MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestPAMdata/DukeForest/Sites/Site12",min.freq = 500,max.freq=2000)
 
 ```
-#2 Model 
 
-##2.1 feature extraction 
-There are many different ways that scientists do this, but the overarching idea is that sound data contains too much redundant information to be used on a model. Computers just don’t have enough power to crunch all those numbers, so we need to identify a meaningful set of features that is smaller than using the whole waveform. This is also the case for image processing.
+#2 Model
 
-We are going to use a feature extraction method called ‘Mel-frequency cepstral coefficients’. Make sure to specify the minimum and maximum frequency from your spectogram above - we may want to add in some other specifics here. 
+##2.1 feature extraction There are many different ways that scientists do this, but the overarching idea is that sound data contains too much redundant information to be used on a model. Computers just don't have enough power to crunch all those numbers, so we need to identify a meaningful set of features that is smaller than using the whole waveform. This is also the case for image processing.
+
+We are going to use a feature extraction method called 'Mel-frequency cepstral coefficients'. Make sure to specify the minimum and maximum frequency from your spectogram above - we may want to add in some other specifics here.
+
 ```{r}
 MyFeatureDataFrame <- MFCCFunction(input.dir = "/Users/sarahroberts/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/acoustic_BASS/data/subset",min.freq = 500,max.freq=2000)
 ```
-This is a multivariate data frame that we can now cluster using a pca 
 
-##2.2 PCA 
+This is a multivariate data frame that we can now cluster using a pca
+
+##2.2 PCA
+
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
 
@@ -109,8 +114,8 @@ ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
 
 ```
 
-##2.3 model runs
-lets run a basic random forest and support vector machine 
+##2.3 model runs lets run a basic random forest and support vector machine
+
 ```{r}
 
 MyFeatureDataFrame <- MyFeatureDataFrame
@@ -123,18 +128,16 @@ print(ml.model.rf)
 
 ```
 
-#3 cross validation 
-I think the best way to do this would be using tidymodels. For the general workflow we are going to split our data up into 70% for training/tuning the model and 30% for testing. That 30% is going to be locked in a vault and we won't look at it until we have created a model we are satisfied with using cross validation (on the 70%)
+#3 cross validation I think the best way to do this would be using tidymodels. For the general workflow we are going to split our data up into 70% for training/tuning the model and 30% for testing. That 30% is going to be locked in a vault and we won't look at it until we have created a model we are satisfied with using cross validation (on the 70%)
 
-as an example, I will work with 10 data files 
+as an example, I will work with 10 data files
 
-##3.1 split into training and testing 
-training = 70%, testing (vault) = 30% 
-remember, within the training data we will be doing some sort of cross validation - if you aren't familiar with tidymodels, refer to the separate code called tidymodels_regression_trees.Rmd
+##3.1 split into training and testing training = 70%, testing (vault) = 30% remember, within the training data we will be doing some sort of cross validation - if you aren't familiar with tidymodels, refer to the separate code called tidymodels_regression_trees.Rmd
 
-The function rsample::initial_split() takes the original data and saves the information on how to make the partitions. 
+The function rsample::initial_split() takes the original data and saves the information on how to make the partitions.
 
 Here we used the strata argument, which conducts a stratified split. This ensures that, despite any imbalance in our class variable, our training and test data sets will keep roughly the same proportions as in the original data. After the initial_split, the training() and testing() functions return the actual data sets.
+
 ```{r}
 set.seed(123)
 rf_split <- initial_split(MyFeatureDataFrame, 
@@ -145,14 +148,14 @@ train <- training(rf_split)
 test  <- testing(rf_split)
 ```
 
-##3.2 Random forest 
-Random forest models are ensembles of decision trees. A large number of decision tree models are created for the ensemble based on slightly different versions of the training set. When creating the individual decision trees, the fitting process encourages them to be as diverse as possible. The collection of trees are combined into the random forest model and, when a new sample is predicted, the votes from each tree are used to calculate the final predicted value for the new sample. For categorical outcome variables like class in our data example, the majority vote across all the trees in the random forest determines the predicted class for the new sample.
+##3.2 Random forest Random forest models are ensembles of decision trees. A large number of decision tree models are created for the ensemble based on slightly different versions of the training set. When creating the individual decision trees, the fitting process encourages them to be as diverse as possible. The collection of trees are combined into the random forest model and, when a new sample is predicted, the votes from each tree are used to calculate the final predicted value for the new sample. For categorical outcome variables like class in our data example, the majority vote across all the trees in the random forest determines the predicted class for the new sample.
 
-One of the benefits of a random forest model is that it is very low maintenance; it requires very little preprocessing of the data and the default parameters tend to give reasonable results. For that reason, we won’t create a recipe for the acoustic data.
+One of the benefits of a random forest model is that it is very low maintenance; it requires very little preprocessing of the data and the default parameters tend to give reasonable results. For that reason, we won't create a recipe for the acoustic data.
 
 At the same time, the number of trees in the ensemble should be large (in the thousands) and this makes the model moderately expensive to compute.
 
-To fit a random forest model on the training set, let’s use the parsnip package with the ranger engine. We first define the model that we want to create:
+To fit a random forest model on the training set, let's use the parsnip package with the ranger engine. We first define the model that we want to create:
+
 ```{r}
 # Define the random forest
 rf_mod <- 
@@ -170,12 +173,12 @@ rf_fit <-
   fit(class ~ ., data = train)
 rf_fit
 ```
+
 This new rf_fit object is our fitted model, trained on our training data set.
 
-But how do we know this is the best model? Lets use v-fold cross validation and tuning- read more about that here: https://www.tidymodels.org/start/resampling/ and here: https://juliasilge.com/blog/sf-trees-random-tuning/
+But how do we know this is the best model? Lets use v-fold cross validation and tuning- read more about that here: <https://www.tidymodels.org/start/resampling/> and here: <https://juliasilge.com/blog/sf-trees-random-tuning/>
 
-##3.3 Tuning 
-Now it’s time to create a model specification for a random forest where we will tune mtry (the number of predictors to sample at each split) and min_n (the number of observations needed to keep splitting nodes). These are hyperparameters that can be learned from data when training the model.
+##3.3 Tuning Now it's time to create a model specification for a random forest where we will tune mtry (the number of predictors to sample at each split) and min_n (the number of observations needed to keep splitting nodes). These are hyperparameters that can be learned from data when training the model.
 
 ```{r}
 tune_spec <- rand_forest(
@@ -189,18 +192,18 @@ tune_spec <- rand_forest(
 tune_spec
 ```
 
-Now it’s time to tune the hyperparameters for a random forest model. First, let’s create a set of cross-validation resamples to use for tuning.
+Now it's time to tune the hyperparameters for a random forest model. First, let's create a set of cross-validation resamples to use for tuning.
 
 ```{r}
 set.seed(234)
 trees_folds <- vfold_cv(train,v = 2, strata = class) #usually you use something like 10-fold cross validation 
 ```
 
-We are ready to tune! Let’s use tune_grid() to fit models at all the different values we chose for each tuned hyperparameter. There are several options for building the object for tuning:
+We are ready to tune! Let's use tune_grid() to fit models at all the different values we chose for each tuned hyperparameter. There are several options for building the object for tuning:
 
-- Tune a model specification along with a recipe or model, or
+-   Tune a model specification along with a recipe or model, or
 
-- Tune a workflow() that bundles together a model specification and a recipe or model preprocessor.
+-   Tune a workflow() that bundles together a model specification and a recipe or model preprocessor.
 
 Here we use a workflow() with a straightforward formula; if this model required more involved data preprocessing, we could use add_recipe() instead of add_formula().
 
@@ -210,7 +213,8 @@ tree_wf <- workflow() %>%
   add_formula(class ~ .)
 
 ```
-We can’t learn the right values when training a single model, but we can train a whole bunch of models and see which ones turn out best. We can use parallel processing to make this go faster, since the different parts of the grid are independent. Let’s use grid = 20 to choose 20 grid points automatically.
+
+We can't learn the right values when training a single model, but we can train a whole bunch of models and see which ones turn out best. We can use parallel processing to make this go faster, since the different parts of the grid are independent. Let's use grid = 20 to choose 20 grid points automatically.
 
 ```{r}
 doParallel::registerDoParallel()
@@ -224,6 +228,7 @@ tune_res <- tune_grid(
 
 tune_res
 ```
+
 Once we have our tuning results, we can both explore them through visualization and then select the best result. The function collect_metrics() gives us a tidy tibble with all the results. We had two metrics, accuracy and roc_auc, and we get a row for each metric and model.
 
 ```{r}
@@ -232,6 +237,7 @@ tune_res %>%
 ```
 
 We might get more out of plotting these results:
+
 ```{r}
 tune_res %>%
   collect_metrics() %>%
@@ -246,7 +252,9 @@ tune_res %>%
   facet_wrap(~parameter, scales = "free_x") +
   labs(x = NULL, y = "AUC")
 ```
-we can go back and tune again if we know that there is a range of min_n and mtry that work best 
+
+we can go back and tune again if we know that there is a range of min_n and mtry that work best
+
 ```{r}
 rf_grid <- grid_regular(
   mtry(range = c(10, 30)),
@@ -256,6 +264,7 @@ rf_grid <- grid_regular(
 
 rf_grid
 ```
+
 We can tune one more time, but this time in a more targeted way with this rf_grid.
 
 ```{r}
@@ -280,8 +289,7 @@ regular_res %>%
   labs(y = "AUC")
 ```
 
-
-##3.4 best model 
+##3.4 best model
 
 ```{r}
 best_auc <- select_best(tune_res, "roc_auc") #you could do this on regular_res as well 
@@ -293,8 +301,8 @@ final_rf <- finalize_model(
 
 final_rf
 ```
-##3.5 testing
-Let’s make a final workflow, and then fit one last time, using the convenience function last_fit(). This function fits a final model on the entire training set and evaluates on the testing set. We just need to give this function our original train/test split.
+
+##3.5 testing Let's make a final workflow, and then fit one last time, using the convenience function last_fit(). This function fits a final model on the entire training set and evaluates on the testing set. We just need to give this function our original train/test split.
 
 ```{r}
 final_wf <- workflow() %>%
