@@ -81,7 +81,9 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
 # 2 Model
 
 ## 2.1 feature extraction
+
 Create subset of files in CSV & in Site_41.
+
 ```{r}
 # Specify the paths for the old and new directories
 old_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41"
@@ -110,6 +112,7 @@ for (file_path in file_subset) {
 ```
 
 MFCCFunction Truncates filename in `Class` after an underscore.
+
 ```{r}
 # Assuming dir_path is the path to the directory containing the files
 dir_path <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset"
@@ -163,25 +166,30 @@ ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
 ```
 
 ## 2.3 model runs
+
 Run a basic random forest and support vector machine
 
 ```{r}
 
 MyFeatureDataFrame <- MyFeatureDataFrame
-MyFeatureDataFrame$class <- as.factor(MyFeatureDataFrame$class)
+MyFeatureDataFrame$Class <- as.factor(MyFeatureDataFrame$Class)
 
-ml.model.rf <- randomForest::randomForest(x=MyFeatureDataFrame[, 2:ncol(MyFeatureDataFrame)], y = MyFeatureDataFrame$class)
+ml.model.rf <- randomForest::randomForest(x=MyFeatureDataFrame[, 2:ncol(MyFeatureDataFrame)], y = MyFeatureDataFrame$Class)
 
 
 print(ml.model.rf)
 
 ```
 
-#3 cross validation I think the best way to do this would be using tidymodels. For the general workflow we are going to split our data up into 70% for training/tuning the model and 30% for testing. That 30% is going to be locked in a vault and we won't look at it until we have created a model we are satisfied with using cross validation (on the 70%)
+# 3 cross validation
+
+I think the best way to do this would be using tidymodels. For the general workflow we are going to split our data up into 70% for training/tuning the model and 30% for testing. That 30% is going to be locked in a vault and we won't look at it until we have created a model we are satisfied with using cross validation (on the 70%)
 
 as an example, I will work with 10 data files
 
-##3.1 split into training and testing training = 70%, testing (vault) = 30% remember, within the training data we will be doing some sort of cross validation - if you aren't familiar with tidymodels, refer to the separate code called tidymodels_regression_trees.Rmd
+## 3.1 split into training and testing
+
+training = 70%, testing (vault) = 30% remember, within the training data we will be doing some sort of cross validation - if you aren't familiar with tidymodels, refer to the separate code called tidymodels_regression_trees.Rmd
 
 The function rsample::initial_split() takes the original data and saves the information on how to make the partitions.
 
@@ -190,7 +198,7 @@ Here we used the strata argument, which conducts a stratified split. This ensure
 ```{r}
 set.seed(123)
 rf_split <- initial_split(MyFeatureDataFrame, 
-                            strata = class, 
+                            strata = Class, 
                           prop = .7)
 
 train <- training(rf_split)
@@ -243,7 +251,7 @@ Now it's time to tune the hyperparameters for a random forest model. First, let'
 
 ```{r}
 set.seed(234)
-trees_folds <- vfold_cv(train,v = 2, strata = class) #usually you use something like 10-fold cross validation 
+trees_folds <- vfold_cv(train,v = 2, strata = Class) #usually you use something like 10-fold cross validation 
 ```
 
 Use tune_grid() to fit models at all the different values we chose for each tuned hyperparameter.
