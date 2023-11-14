@@ -81,25 +81,84 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
 # 2 Model
 
 ## 2.1 feature extraction
+Create subset of files in CSV & in Site_41.
+```{r}
+# Specify the paths for the old and new directories
+old_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41"
+new_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset"
+
+# Create the new directory if it doesn't exist
+if (!file.exists(new_directory)) {
+  dir.create(new_directory)
+}
+
+# Get a list of files in the old directory
+all_files <- list.files(old_directory, pattern = ".wav", full.names = TRUE)
+
+# Filter files based on the conditions in Pfer_clean dataframe
+files_in_dataframe <- Pfer_clean$Filename[Pfer_clean$Validation %in% c("present", "absent") & Pfer_clean$Site == "Site_41"]
+
+# Create a subset of files based on the condition
+file_subset <- all_files[basename(all_files) %in% files_in_dataframe]
+
+# Copy the subset of files to the new directory
+for (file_path in file_subset) {
+  new_file_path <- file.path(new_directory, basename(file_path))
+  file.copy(file_path, new_file_path)
+  cat("Copied file:", file_path, "to", new_file_path, "\n")
+}
+```
+
+MFCCFunction Truncates filename in `Class` after an underscore.
+```{r}
+# Assuming dir_path is the path to the directory containing the files
+dir_path <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset"
+
+# Get the list of files in the directory
+file_list <- list.files(dir_path)
+
+# Merge Pfer_clean with file_list based on Filename
+merged_data <- merge(Pfer_clean, data.frame(Filename = file_list), by = "Filename")
+
+# Function to generate new filenames
+generate_new_filename <- function(row, index) {
+  paste0(row$Validation, "_", index, ".wav")
+}
+
+# Rename files
+for (i in 1:nrow(merged_data)) {
+  old_filename <- file.path(dir_path, merged_data$Filename[i])
+  new_filename <- generate_new_filename(merged_data[i, ], i)
+  new_filename <- file.path(dir_path, new_filename)
+
+  # Rename the file
+  file.rename(old_filename, new_filename)
+}
+
+# Optionally, print the renamed files
+list.files(dir_path)
+```
 
 ```{r}
-MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_21", min.freq = 2500,max.freq = 3500)
+MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset", min.freq = 2500,max.freq = 3500)
 
-# input.dir2 = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41"
+# input.dir2 = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_21"
 ```
 
 This is a multivariate data frame that we can now cluster using a pca
 
 ## 2.2 PCA
 
+Cluster with PCA and also add new column in feature data frame with new column containing "absent" or "present" depending on classification associated with "Class" (the WAV filename) in Pfer_clean.
+
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
 
-MyFeatureDataFrame <- MyFeatureDataFrame %>% 
-  mutate(class = if_else(str_starts(Class, "absent"), "absent", "present"))
+# MyFeatureDataFrame <- MyFeatureDataFrame %>%
+#  left_join(Pfer_clean %>% select(Filename, Validation), by = c("Class" = "Filename"))
 
 ggplot2::autoplot(pca_res, data = MyFeatureDataFrame,
-         colour = 'class')
+         colour = 'Class')
 
 ```
 
