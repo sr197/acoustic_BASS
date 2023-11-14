@@ -223,7 +223,7 @@ rf_mod <-
 set.seed(234)
 rf_fit <- 
   rf_mod %>% 
-  fit(class ~ ., data = train)
+  fit(Class ~ ., data = train)
 rf_fit
 ```
 
@@ -231,7 +231,7 @@ This new rf_fit object is our fitted model, trained on our training data set.
 
 But how do we know this is the best model? Lets use v-fold cross validation and tuning- read more about that here: <https://www.tidymodels.org/start/resampling/> and here: <https://juliasilge.com/blog/sf-trees-random-tuning/>
 
-##3.3 Tuning
+## 3.3 Tuning
 
 Now it's time to create a model specification for a random forest where we will tune mtry (the number of predictors to sample at each split) and min_n (the number of observations needed to keep splitting nodes). These are hyperparameters that can be learned from data when training the model.
 
@@ -261,7 +261,7 @@ Here we use a workflow() with a straightforward formula; if this model required 
 ```{r}
 tree_wf <- workflow() %>%
   add_model(tune_spec) %>%
-  add_formula(class ~ .)
+  add_formula(Class ~ .)
 
 ```
 
@@ -308,8 +308,8 @@ we can go back and tune again if we know that there is a range of min_n and mtry
 
 ```{r}
 rf_grid <- grid_regular(
-  mtry(range = c(10, 30)),
-  min_n(range = c(2, 8)),
+  mtry(range = c(0, 30)),
+  min_n(range = c(0, 15)),
   levels = 5
 )
 
@@ -340,7 +340,7 @@ regular_res %>%
   labs(y = "AUC")
 ```
 
-##3.4 best model
+## 3.4 best model
 
 ```{r}
 best_auc <- select_best(tune_res, "roc_auc") #you could do this on regular_res as well 
@@ -353,11 +353,13 @@ final_rf <- finalize_model(
 final_rf
 ```
 
-##3.5 testing Let's make a final workflow, and then fit one last time, using the convenience function last_fit(). This function fits a final model on the entire training set and evaluates on the testing set. We just need to give this function our original train/test split.
+## 3.5 testing
+
+Let's make a final workflow, and then fit one last time, using the convenience function last_fit(). This function fits a final model on the entire training set and evaluates on the testing set. We just need to give this function our original train/test split.
 
 ```{r}
 final_wf <- workflow() %>%
-  add_formula(class ~ .) %>%
+  add_formula(Class ~ .) %>%
   add_model(final_rf)
 
 final_res <- final_wf %>%
@@ -369,6 +371,6 @@ final_res %>%
 #confusion matrix 
 final_res %>%
     collect_predictions() %>%
-    conf_mat(class, .pred_class)
+    conf_mat(Class, .pred_class)
 
 ```
