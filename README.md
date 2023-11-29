@@ -20,6 +20,7 @@ Soundclass - convolutional neural networks (CNNs)
 
 gibbonR 
   https://github.com/DenaJGibbon/gibbonR
+  tutorial - https://github.com/DenaJGibbon/gibbonR/blob/master/vignettes/gibbonR-tutorial.Rmd 
   
 bioacoustics - unsupervised classification 
   https://github.com/WavX/bioacoustics/blob/master/vignettes/tutorial.Rmd 

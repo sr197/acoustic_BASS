@@ -1,0 +1,346 @@
+---
+title: "C. nictitans Random Forest Model"
+output:
+  pdf_document:
+    latex_engine: xelatex
+date: "2023-10-30"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("tidyverse")
+#install.packages("dplyr")
+#install.packages("bioacoustics")
+#install.packages("soundClass")
+#install.packages("caret")
+#install.packages("tinytex")
+#install.packages("devtools")
+#devtools::install_github("DenaJGibbon/gibbonR")
+#install.packages("caret")
+
+library(caret)
+library(tinytex)
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(bioacoustics)
+library(soundClass)
+library(gibbonR)
+library(dplyr)
+
+getwd()
+setwd("C:/Users/Caro----/Box/innovations-research-tech/PAM")
+```
+
+```{r, importing data and data wrangling}
+# Read in CSV file into a data frame
+
+arbimonCnictraining <- read.csv("./acoustic_BASS/data/csv files/arbimonCnictraining.csv")
+
+# Create a sequence of numbers from "_0001" to "_0060" 
+numbers <- sprintf("_%04d", 00:60)
+
+# Use rep() to repeat the numbers for all rows in the data frame
+numbers <- rep(numbers, length.out = nrow(arbimonCnictraining))
+
+# Concatenate the first and second columns, adding the numbers to the end of the file names
+arbimonCnictraining$newfilename <- paste0(arbimonCnictraining$filename, numbers)
+
+#adding .wav to the end of the new file name column
+arbimonCnictraining$newfilename <- paste0(arbimonCnictraining$newfilename, ".wav")
+
+# Assuming your date column is named "Date" and is in the format "yyyy-mm-dd"
+arbimonCnictraining$Date <- as.Date(arbimonCnictraining$date, format = "%m/%d/%Y")
+
+#cleaning the data-renaming columns
+Cnic_data_wrangling <- arbimonCnictraining %>% 
+  rename(Validation = PresentAbsent) %>% 
+  rename(Site = site) %>% 
+  rename(Filename = newfilename)
+
+#Deleting columns that are not necessary
+Cnic_data_wrangling <- Cnic_data_wrangling %>% 
+  select(Filename, Site, Date, Validation)
+
+
+# Write the updated data frame back to a CSV file
+write.csv(Cnic_data_wrangling, "./acoustic_BASS/data/csv files/Cnic_data_wrangling.csv", row.names = FALSE)
+
+```
+
+```{r, reading in longhi roughi data and cleaning it}
+# Read the first CSV file into a dataframe
+LR_wrangling<- read.csv("./acoustic_BASS/data/csv files/LRexport.csv")
+
+#creating and formatting a date column
+LR_wrangling$Date <- as.Date(LR_wrangling$date, format = "%m/%d/%Y")
+
+#cleaning the data-renaming columns
+LR_wrangling <- LR_wrangling%>% 
+  rename(Validation = PresentAbsent) %>% 
+  rename(Site = site) %>% 
+  rename(Filename = filename)
+
+#Deleting columns that are not necessary
+LR_wrangling<- LR_wrangling %>% 
+  select(Filename, Site, Date, Validation)
+
+write.csv(LR_wrangling, "./acoustic_BASS/data/csv files/LR_wrangling.csv", row.names = FALSE)
+```
+
+```{r, filtering for present and absence data}
+#read in new csv
+Cnictitans_all_cleaned <- read.csv("./acoustic_BASS/data/csv files/Cnic_data_wrangling.csv")
+LR_all_cleaned <- read.csv("./acoustic_BASS/data/csv files/LR_wrangling.csv")
+
+#combining the dataframes
+Cnictitans_LRandplots_cleaned <- rbind(Cnictitans_all_cleaned, LR_all_cleaned)
+
+#formatting the date
+Cnictitans_LRandplots_cleaned$Date <- as.Date(Cnictitans_LRandplots_cleaned$Date, format = "%Y-%m-%d")
+
+#deleting the NA
+Cnic_training <- na.omit(Cnictitans_LRandplots_cleaned)
+
+#turning all absences to 0 and presents to 1
+Cnic_training$Validation[Cnic_training$Validation %in% c(1, 2, 3, 4)] <- 1
+
+# Convert the column to a factor with custom levels
+Cnic_training$Validation <- factor(Cnic_training$Validation, levels = c(1, 0), labels = c("present", "absent"))
+
+#balancing the data
+
+Cnic_training <- Cnic_training %>%
+  group_by(Validation) %>%
+  sample_n(size = ifelse(unique(Validation) == "absent", 418, n()))
+
+presence_counts <- table(Cnic_training$Validation)
+presence_counts
+```
+
+```{r dividing the training data 70/70 equally}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Create a stratified training set with 70% of the data
+training_indices <- createDataPartition(Cnic_training$Validation, p = 0.7, list = FALSE)
+
+# Split the data based on the generated indices
+Cnic_training70 <- Cnic_training[training_indices, ]
+Cnic_validation30 <- Cnic_training[-training_indices, ]
+
+#check the split by viewing tables
+training70_table <- table(Cnic_training70$Validation)
+training70_table
+validation30_table <- table(Cnic_validation30$Validation)
+validation30_table
+
+#create a list of file names to read in audio files
+Cnictraining70_file_names <- Cnic_training70$Filename 
+Cnic_validation30_file_names <- Cnic_validation30$Filename
+```
+
+```{r, reading in the audio files for the training and validation data}
+
+#reading in the audio files for the 70% training
+audio_list_Cnic70 <- list()
+
+for (Filename in Cnictraining70_file_names) {
+  file_path <- file.path("./GabonAcousticData/", Filename)
+  audio <- readWave(file_path)
+  audio_list_Cnic70[[Filename]] <- audio
+}
+
+
+#reading in the audio files for the 30% validation
+audio_list_Cnic30 <- list()
+
+for (Filename in Cnic_validation30_file_names) {
+  file_path <- file.path("./GabonAcousticData/", Filename)
+  audio <- readWave(file_path)
+  audio_list_Cnic30[[Filename]] <- audio
+}
+```
+
+```{#r, MFCCF for training and validation data}
+#running the MFCCF on training data
+Cnic_training70_MFCCF <- gibbonR::MFCCFunction(input.dir=audio_list_Cnic70, min.freq = 100, max.freq = 1800,win.avg='standard')
+
+# Extract MFCC features from the validation data
+Cnic_validation30_MFCC <- gibbonR::MFCCFunction(input.dir = audio_list_Cnic30, min.freq = 100, max.freq = 1800, win.avg = 'standard')
+
+
+write.csv(Cnic_training70_MFCCF, "Cnic_traing70_MFCC.csv", row.names = FALSE)
+write.csv(Cnic_validation30_MFCC, "Cnic_validation30_MFCC.csv", row.names = FALSE)
+
+```
+
+```{r, training Random Forest Model}
+#reading in the csv
+Cnic_training70_MFCC <- read.csv("./Cnic_traing70_MFCC.csv")
+
+#wrangling the rows for presence and absence
+Cnic_training70_MFCC <- subset(Cnic_training70_MFCC, select = -class)
+Cnic_training70_MFCC <- cbind(PresentAbsent = Cnic_training70$PresentAbsent, Cnic_training70_MFCC)
+
+# assigning levels to present and absent
+levels(Cnic_training70_MFCC$PresentAbsent) <- c("present", "absent")
+
+# Set "present" as the positive class and "absent" as the negative class
+Cnic_training70_MFCC$PresentAbsent <- factor(Cnic_training70_MFCC$PresentAbsent, levels = c("present", "absent"))
+
+#training the random forest model
+ml.model.rf <- randomForest::randomForest(x = Cnic_training70_MFCC[, 2:ncol(Cnic_training70_MFCC)], y = Cnic_training70_MFCC$PresentAbsent)
+
+print(ml.model.rf)
+```
+
+```{r, validating the model}
+Cnic_validation30_MFCC <- read.csv("./Cnic_validation30_MFCC.csv")
+
+#wrangling the rows for presence and absence
+Cnic_validation30_MFCC <- subset(Cnic_validation30_MFCC, select = -class)
+Cnic_validation30_MFCC <- cbind(PresentAbsent = Cnic_validation30$PresentAbsent, Cnic_validation30_MFCC)
+
+# assigning levels to present and absent
+levels(Cnic_validation30_MFCC$PresentAbsent) <- c("present", "absent")
+
+# Set "present" as the positive class and "absent" as the negative class
+Cnic_validation30_MFCC$PresentAbsent <- factor(Cnic_validation30_MFCC$PresentAbsent, levels = c("present", "absent"))
+
+# Use the trained Random Forest model to make predictions
+predictions <- predict(ml.model.rf, newdata = Cnic_validation30_MFCC[, 2:ncol(Cnic_validation30_MFCC)])
+
+# Create a vector of the true labels 
+true_labels <- Cnic_validation30$PresentAbsent
+
+# Make sure both vectors have the same factor levels
+predictions <- factor(predictions, levels = levels(true_labels))
+
+# Create a confusion matrix
+conf_matrix <- confusionMatrix(predictions, true_labels)
+
+```
+
+
+
+```{r, checking the models performance}
+# Confusion matrix
+print(conf_matrix)
+
+# Calculate precision, recall, and F1-score
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Display the results
+cat("Accuracy:", conf_matrix$overall["Accuracy"], "\n")
+cat("Precision:", precision, "\n")
+cat("Recall:", recall, "\n")
+cat("F1 Score:", f1_score, "\n")
+```
+
+```{r}
+
+```
+
+
+
+
+```{#r, creating df and vectors of different Passive Acoustic Monitoring Sites}
+
+# Viewing all the site names
+sitenames <- unique(Cnictitans_all_cleaned$site)
+print(sitenames)
+
+
+# Filtering the data into sites
+DF5_1 <- subset(Cnictitans_all_cleaned, site == "DF5_1") 
+DF5_2 <- subset(Cnictitans_all_cleaned, site == "DF5_2")
+DF5_3 <- subset(Cnictitans_all_cleaned, site == "DF5_3")
+DF6_1 <- subset(Cnictitans_all_cleaned, site == "DF6_1")
+DF6_3 <- subset(Cnictitans_all_cleaned, site == "DF6_3")
+DF2_1 <- subset(Cnictitans_all_cleaned, site == "DF2_1")
+DF2_2 <- subset(Cnictitans_all_cleaned, site == "DF2_2")
+DF2_3 <- subset(Cnictitans_all_cleaned, site == "DF2_3")
+DF4_1 <- subset(Cnictitans_all_cleaned, site == "DF4_1")
+DF4_2 <- subset(Cnictitans_all_cleaned, site == "DF4_2")
+DF4_3 <- subset(Cnictitans_all_cleaned, site == "DF4_3")
+IF4_1 <- subset(Cnictitans_all_cleaned, site == "IF4_1")
+IF4_2 <- subset(Cnictitans_all_cleaned, site == "IF4_2")
+IF4_3 <- subset(Cnictitans_all_cleaned, site == "IF4_3")
+
+
+```
+```{r, DF5_1 June 12 data wrangling}
+#creating dataframes and filename lists for DF51 by date
+DF51_June12 <- subset(DF5_1, Date == "2023-6-12")
+DF51_June12_filenames <- DF51_June12$newfilename
+
+#reading in the audio files for DF51 June 12
+audio_list_DF51_June12 <- list()
+
+for (newfilename in DF51_June12_filenames) {
+  file_path <- file.path("./GabonAcousticData", newfilename)
+  audio <- readWave(file_path)
+  audio_list_DF51_June12[[newfilename]] <- audio
+}
+
+# Extract MFCC features 
+DF51_June12_MFCC <- gibbonR::MFCCFunction(input.dir = audio_list_DF51_June12, min.freq = 100, max.freq = 1800, win.avg = 'standard')
+```
+```{r, data wrangling DF51 MFCC}
+DF51_June12_MFCC_raw <- DF51_June12_MFCC
+
+# Ensure that the columns in Cnic_validation_MFCC match the columns used in training
+DF51_June12_MFCC_raw  <- cbind(DF51_June12_MFCC_raw, PresentAbsent = DF51_June12$PresentAbsent)
+
+
+# Replace NAs with 3 in the "ColumnToRename" column
+DF51_June12_MFCC_raw$PresentAbsent<- ifelse(is.na(DF51_June12_MFCC_raw$PresentAbsent), 9, DF51_June12_MFCC_raw$PresentAbsent)
+
+DF51_June12_MFCC_raw$PresentAbsent <- factor(DF51_June12_MFCC_raw$PresentAbsent, levels = c(0, 1, 9), labels = c("absent", "present", "unknown"))
+
+# Convert the "PresentAbsent" column to a factor and specify "unknown" as a level
+new_data$PresentAbsent <- factor(new_data$PresentAbsent, levels = c(0, 1, 9), labels = c("absent", "present", "unknown"))
+
+
+# Make predictions on the new data
+DF51_June12_predictions <- predict(ml.model.rf, newdata = DF51_June12_MFCC_raw[, 2:ncol(DF51_June12_MFCC_raw)])
+
+# The 'predictions' variable now contains the model's predictions for the new data
+
+
+```
+```{#old code}
+# Ensure that the columns in Cnic_validation_MFCC match the columns used in training
+DF51_June12_MFCC <- cbind(DF51_June12_MFCC, PresentAbsent = DF51_June12$PresentAbsent)
+
+
+
+
+
+
+# Replace all NA values in the "PresentAbsent" column with "unknown"
+DF51_June12_MFCC$PresentAbsent <- ifelse(is.na(DF51_June12_MFCC$PresentAbsent), "unknown", DF51_June12_MFCC$PresentAbsent)
+
+DF51_June12_MFCC$PresentAbsent[DF51_June12_MFCC$PresentAbsent %in% c(1, 2, 3, 4)] <- 1
+
+# Convert the column to a factor with custom levels
+DF51_June12_MFCC$PresentAbsent <- factor(DF51_June12_MFCC$PresentAbsent, levels = c(0, 1), labels = c("absent", "present")) 
+
+
+# Use the trained Random Forest model to make predictions
+DF51_June12_predictions <- predict(ml.model.rf, newdata = DF51_June12_MFCC[, 2:ncol(DF51_June12_MFCC)])
+
+predictionsDf51 <- predict(ml.model.rf, newdata = DF51_June12_MFCC)
+
+
+```
+
+
+
+

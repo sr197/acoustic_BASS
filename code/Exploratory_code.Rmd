@@ -28,7 +28,7 @@ library(tidymodels)
 library(tidyflow)
 library(tidyverse)
 
-install.packages("soundClass")
+#install.packages("soundClass")
 
 ```
 
@@ -67,6 +67,35 @@ From this spectogram, we can tell which frequency the actual call is between (50
 ##1.4 DF data 
 ##INSERT CAROLINE CODE HERE 
 Try reading in duke forest data. Need to read in the wav files, categorize as present or absent using the csv, and select out a small portion to do stuff with (so the computer doesn't explode)
+```{r,importing data and data wrangling}
+#Pfer_raw <- read.csv("data/csv_files/Pfer_raw.csv")
+Pfer_raw <- read.csv("data/csv_files/Pfer_raw2.csv")
+
+getwd()
+# Assuming your date column is named "Date" and is in the format "yyyy-mm-dd"
+Pfer_raw$Date <- as.Date(Pfer_raw$date, format = "%m/%d/%Y")
+
+Pfer_raw <- Pfer_raw %>% 
+  rename(Validation =  'val.Pseudacris.feriarum.Common.Song.') %>% 
+  rename(Site = site) %>% 
+  rename(Filename = filename)
+
+# Deleting columns that are not necessary
+Pfer_clean <- Pfer_raw %>% 
+  select(Filename, Site, Date, Validation)
+  
+# Convert the column to a factor with custom levels
+Pfer_clean$Validation <- factor(Pfer_clean$Validation, levels = c(1, 0), labels = c("present", "absent"))
+
+#filtering for the Training data
+Pfer_training <- na.omit(Pfer_clean)
+validationcounts <- table(Pfer_training$Validation)
+sitecounts <-table(Pfer_training$Site)
+sitecounts
+
+# Write the updated data frame back to a CSV file
+write.csv(Pfer_clean, "./data/csv_files/Pfer_clean", row.names = FALSE)
+```
 
 ```{r}
 
@@ -82,9 +111,38 @@ PAM5_20230225_024000.wav", min.freq = 500,
     Colors = "Colors")
 ```
 
-```{r}
-MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestPAMdata/DukeForest/Sites/Site12",min.freq = 500,max.freq=2000)
 
+```{r}
+Pfer_clean <- read_table("./data/csv files/Pfer_clean.csv")
+
+# Specify the paths for the old and new directories
+old_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41"
+new_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset"
+
+# Create the new directory if it doesn't exist
+if (!file.exists(new_directory)) {
+  dir.create(new_directory)
+}
+
+# Get a list of files in the old directory
+all_files <- list.files(old_directory, pattern = ".wav", full.names = TRUE)
+
+# Filter files based on the conditions in Pfer_clean dataframe
+files_in_dataframe <- Pfer_clean$Filename[Pfer_clean$Validation %in% c("present", "absent") & Pfer_clean$Site == "Site_41"]
+
+# Create a subset of files based on the condition
+file_subset <- all_files[basename(all_files) %in% files_in_dataframe]
+
+# Copy the subset of files to the new directory
+for (file_path in file_subset) {
+  new_file_path <- file.path(new_directory, basename(file_path))
+  file.copy(file_path, new_file_path)
+  cat("Copied file:", file_path, "to", new_file_path, "\n")
+}
+```
+
+```{r}
+MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41", min.freq = 2500,max.freq = 3500)
 ```
 #2 Model 
 
