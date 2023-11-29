@@ -82,7 +82,7 @@ SpectrogramSingle(sound.file = "~/Library/CloudStorage/Box-Box/innovations-resea
 
 ## 2.1 feature extraction
 
-Create subset of files in CSV & in Site_41.
+Create subset of files in CSV & in Site_41 based on whether they have been classified already.
 
 ```{r}
 # Specify the paths for the old and new directories
@@ -111,7 +111,7 @@ for (file_path in file_subset) {
 }
 ```
 
-MFCCFunction Truncates filename in `Class` after an underscore.
+MFCCFunction Truncates filename in `Class` after an underscore, so the below code renames files based on absent/present.
 
 ```{r}
 # Assuming dir_path is the path to the directory containing the files
@@ -145,6 +145,8 @@ list.files(dir_path)
 ```{r}
 MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset", min.freq = 2500,max.freq = 3500)
 
+# Cnic_training70_MFCCF <- gibbonR::MFCCFunction(input.dir=audio_list_Cnic70, min.freq = 100, max.freq = 1800,win.avg='standard')
+
 # input.dir2 = "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_21"
 ```
 
@@ -152,7 +154,7 @@ This is a multivariate data frame that we can now cluster using a pca
 
 ## 2.2 PCA
 
-Cluster with PCA and also add new column in feature data frame with new column containing "absent" or "present" depending on classification associated with "Class" (the WAV filename) in Pfer_clean.
+Cluster with PCA
 
 ```{r}
 pca_res <- prcomp(MyFeatureDataFrame[,-c(1)], scale. = TRUE)
