@@ -15,12 +15,13 @@ library(ggplot2)
 library(dplyr)
 ```
 
-Create subset of files in CSV & in Site_41 based on whether they have been classified already.
+Creates subset of files for each site based on if they are classified or not. Also renames files with absent_x and present_x.
 ```{r}
 Pfer_clean <- read.csv("../data/csv_files/Pfer_clean.csv")
 
 # Specify the root directory
 root_directory <- "~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData"
+new_directory <- file.path(root_directory, "upload_chorus_frog_data")
 
 # Get a list of directories in the root directory
 all_directories <- list.dirs(root_directory, recursive = FALSE)
@@ -31,7 +32,6 @@ for (old_directory in all_directories) {
   site_name <- basename(old_directory)
 
   # Create the new directory for subsets
-  new_directory <- file.path(root_directory, paste0(site_name, "_subset"))
   if (!file.exists(new_directory)) {
     dir.create(new_directory)
   }
@@ -49,12 +49,16 @@ for (old_directory in all_directories) {
   file_subset <- all_files[basename(all_files) %in% files_in_dataframe]
 
   # Rename and copy the subset of files to the new directory
+  counter <- 1
   for (file_path in file_subset) {
     validation_label <- Pfer_clean$Validation[Pfer_clean$Filename == basename(file_path)]
-    new_file_name <- paste(validation_label, seq_along(validation_label), sep = "_")
+    new_file_name <- paste(validation_label, counter, sep = "_")
+    new_file_name <- paste(new_file_name, site_name, sep = "_")
+    new_file_name <- paste0(new_file_name, ".wav")
     new_file_path <- file.path(new_directory, new_file_name)
     file.copy(file_path, new_file_path)
     cat("Copied file:", file_path, "to", new_file_path, "\n")
+    counter <- counter + 1
   }
 }
 ```
