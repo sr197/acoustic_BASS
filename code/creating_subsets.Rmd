@@ -15,7 +15,7 @@ library(ggplot2)
 library(dplyr)
 ```
 
-Creates subset of files for each site based on if they are classified or not. Also renames files with absent_x and present_x.
+Creates subset of files in "upload_chorus_frog_data" directory for each site based on if they are classified or not. Also renames files with absent_x and present_x.
 ```{r}
 Pfer_clean <- read.csv("../data/csv_files/Pfer_clean.csv")
 
@@ -64,5 +64,5 @@ for (old_directory in all_directories) {
 ```
 
 ```{r}
-MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/Site_41_subset", min.freq = 2500,max.freq = 3500)
+MyFeatureDataFrame <- MFCCFunction(input.dir ="~/Library/CloudStorage/Box-Box/innovations-research-tech/PAM/DukeForestAcousticData/upload_chorus_frog_data", min.freq = 2500,max.freq = 3500)
 ```
